@@ -63,10 +63,19 @@ if 'calc_done' in st.session_state:
         st.pyplot(fig_elec)
 
     elif option == "Propriétés Mécaniques":
-        st.header("🏗️ Constantes Élastiques")
-        # Exemple d'affichage des résultats mécaniques
-        st.write(f"**Module d'Young :** {tube.young_modulus:.2f} TPa")
-        tube.show_mechanics()
+        st.header("🏗️ Analyse de l'Élasticité")
+        
+        # 1. Affichage de la valeur numérique
+        st.info(f"**Module d'Young calculé :** {tube.young_modulus:.2f} TPa")
+        
+        # 2. Affichage de la courbe (VÉRIFIEZ LE NOM DANS CORE.PY)
+        # Si vous avez une fonction qui trace la courbe de tension/déformation :
+        try:
+            st.subheader("📈 Courbe Énergie vs Déformation")
+            fig_mech = tube.show_mechanics()
+            st.pyplot(fig_mech)
+        except AttributeError:
+            st.warning("La fonction de tracé de la courbe mécanique n'est pas encore liée ou porte un autre nom.")
 
     elif option == "Thermique & Phonons":
         st.header("🔥 Dynamique des Phonons")
