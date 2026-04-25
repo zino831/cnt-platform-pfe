@@ -49,7 +49,7 @@ if 'calc_done' in st.session_state:
         
         st.subheader("🧊 Structure 3D")
         # Ici votre code pour afficher la structure 3D
-        view = tube.show_3d_structure() 
+        view = tube.plot_3d_structure() 
         
         # On convertit l'objet py3Dmol en HTML pour que Streamlit puisse l'afficher
         if view is not None:
