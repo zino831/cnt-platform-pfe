@@ -49,7 +49,13 @@ if 'calc_done' in st.session_state:
         
         st.subheader("🧊 Structure 3D")
         # Ici votre code pour afficher la structure 3D
-        tube.show_3d_structure() 
+        view = tube.show_3d_structure() 
+        
+        # On convertit l'objet py3Dmol en HTML pour que Streamlit puisse l'afficher
+        if view is not None:
+            components.html(view._make_html(), height=450, scrolling=False)
+        else:
+            st.warning("La vue 3D n'a pas pu être générée.") 
 
     elif option == "Propriétés Électroniques":
         st.header("⚡ Structure de Bandes & DOS")
