@@ -59,14 +59,14 @@ if 'calc_done' in st.session_state:
 
     elif option == "Propriétés Électroniques":
         st.header("⚡ Structure de Bandes & DOS")
-        fig_elec = tube.plot_electronics()
+        fig_elec = tube.show_electronics()
         st.pyplot(fig_elec)
 
     elif option == "Propriétés Mécaniques":
         st.header("🏗️ Constantes Élastiques")
         # Exemple d'affichage des résultats mécaniques
         st.write(f"**Module d'Young :** {tube.young_modulus:.2f} TPa")
-        tube.show_mechanics_table()
+        tube.show_mechanics()
 
     elif option == "Thermique & Phonons":
         st.header("🔥 Dynamique des Phonons")
