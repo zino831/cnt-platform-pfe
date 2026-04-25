@@ -41,11 +41,36 @@ if 'calc_done' in st.session_state:
     # --- AFFICHAGE SELON L'OPTION CHOISIE ---
 
     if option == "Résumé & Structure":
-        st.header("📊 Résumé du Nanotube")
+        st.header(f"📊 Résumé du Nanotube ({n}, {m})")
+        
+        # On récupère les infos que votre fonction summary() affichait
+        ntc_type = "Métallique" if tube.is_metallic else "Semi-conducteur"
+        nb_atomes = len(tube.atoms)
+        lz = tube.a_lattice
+        
+        # Affichage stylisé en 3 colonnes
         col1, col2, col3 = st.columns(3)
-        col1.metric("Diamètre", f"{tube.d_t:.3f} nm")
-        col2.metric("Chiralité", f"({n}, {m})")
-        col3.metric("Type", "Métallique" if (n-m)%3==0 else "Semi-conducteur")
+        
+        with col1:
+            st.metric(label="Type de NTC", value=ntc_type)
+            st.metric(label="Chiralité", value=f"({n}, {m})")
+            
+        with col2:
+            st.metric(label="Nombre d'atomes", value=nb_atomes)
+            st.metric(label="Période Lz", value=f"{lz:.3f} Å")
+            
+        with col3:
+            st.metric(label="Diamètre", value=f"{tube.d_t:.3f} nm")
+            # Vous pouvez ajouter une autre métrique ici si besoin
+            
+        st.divider()
+        
+        # Affichage de la structure 3D juste en dessous
+        st.subheader("🧊 Visualisation interactive")
+        import streamlit.components.v1 as components
+        view = tube.show_3d() 
+        if view:
+            components.html(view._make_html(), height=500)
         
         st.subheader("🧊 Structure 3D")
         # Ici votre code pour afficher la structure 3D
