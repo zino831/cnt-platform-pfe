@@ -49,7 +49,7 @@ if 'calc_done' in st.session_state:
         
         st.subheader("🧊 Structure 3D")
         # Ici votre code pour afficher la structure 3D
-        # tube.show_3d_structure() 
+        tube.show_3d_structure() 
 
     elif option == "Propriétés Électroniques":
         st.header("⚡ Structure de Bandes & DOS")
@@ -60,7 +60,7 @@ if 'calc_done' in st.session_state:
         st.header("🏗️ Constantes Élastiques")
         # Exemple d'affichage des résultats mécaniques
         st.write(f"**Module d'Young :** {tube.young_modulus:.2f} TPa")
-        # tube.show_mechanics_table()
+        tube.show_mechanics_table()
 
     elif option == "Thermique & Phonons":
         st.header("🔥 Dynamique des Phonons")
