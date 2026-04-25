@@ -45,8 +45,8 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- TITRE AVEC EFFET ---
-st.markdown("<h1 style='text-align: center; color: #10b981; border-bottom: 2px solid #10b981; padding-bottom: 10px;'>⚛️ CNT DYNAMICS & OPTICS PLATFORM</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: gray;'>Modélisation avancée des Nanotubes de Carbone - PFE Master</p>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #000000; border-bottom: 2px solid #10b981; padding-bottom: 10px;'>⚛️ NTC-Lab : Modélisation & Simulation</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: gray;'>Simulation numérique des propriétés physiques des nanotubes de carbone </p>", unsafe_allow_html=True)
 
 # --- BARRE LATÉRALE (SIDEBAR) ---
 st.sidebar.title("🔬 Paramètres & Menu")
