@@ -3,8 +3,50 @@ import matplotlib.pyplot as plt
 import streamlit.components.v1 as components  # <-- Ajoutez cette ligne
 from cnt_platform.core import CarbonNanotube
 
-# Configuration de la page
-st.set_page_config(page_title="CNT Research Platform", layout="wide")
+st.set_page_config(
+    page_title="CNT Dynamics Pro-Platform",
+    page_icon="⚛️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# 2. INJECTION CSS CUSTOM (Effet Glassmorphism & Neon)
+st.markdown("""
+    <style>
+    /* Supprimer les marges inutiles */
+    .block-container { padding-top: 2rem; }
+    
+    /* Style des cartes de métriques */
+    [data-testid="stMetricValue"] {
+        font-size: 28px;
+        color: #00f2ff;
+        text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
+    }
+    
+    /* Bouton personnalisé */
+    .stButton>button {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid #00f2ff;
+        background-color: rgba(0, 242, 255, 0.1);
+        color: #00f2ff;
+        transition: 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #00f2ff;
+        color: black;
+        box-shadow: 0 0 20px #00f2ff;
+    }
+    
+    /* Cacher le logo Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- TITRE AVEC EFFET ---
+st.markdown("<h1 style='text-align: center; color: #00f2ff; border-bottom: 2px solid #00f2ff; padding-bottom: 10px;'>⚛️ CNT DYNAMICS & OPTICS PLATFORM</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: gray;'>Modélisation avancée des Nanotubes de Carbone - PFE Master</p>", unsafe_allow_html=True)
 
 # --- BARRE LATÉRALE (SIDEBAR) ---
 st.sidebar.title("🔬 Paramètres & Menu")
