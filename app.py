@@ -19,7 +19,7 @@ st.markdown("""
     /* Style des cartes de métriques */
     [data-testid="stMetricValue"] {
         font-size: 28px;
-        color: #00f2ff;
+        color: #10b981;
         text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
     }
     
@@ -27,15 +27,15 @@ st.markdown("""
     .stButton>button {
         width: 100%;
         border-radius: 10px;
-        border: 1px solid #00f2ff;
+        border: 1px solid #10b981;
         background-color: rgba(0, 242, 255, 0.1);
-        color: #00f2ff;
+        color: #10b981;
         transition: 0.3s;
     }
     .stButton>button:hover {
-        background-color: #00f2ff;
+        background-color: #10b981;
         color: black;
-        box-shadow: 0 0 20px #00f2ff;
+        box-shadow: 0 0 20px #10b981;
     }
     
     /* Cacher le logo Streamlit */
@@ -45,7 +45,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- TITRE AVEC EFFET ---
-st.markdown("<h1 style='text-align: center; color: #00f2ff; border-bottom: 2px solid #00f2ff; padding-bottom: 10px;'>⚛️ CNT DYNAMICS & OPTICS PLATFORM</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #10b981; border-bottom: 2px solid #10b981; padding-bottom: 10px;'>⚛️ CNT DYNAMICS & OPTICS PLATFORM</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: gray;'>Modélisation avancée des Nanotubes de Carbone - PFE Master</p>", unsafe_allow_html=True)
 
 # --- BARRE LATÉRALE (SIDEBAR) ---
