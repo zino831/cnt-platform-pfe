@@ -157,10 +157,57 @@ if 'calc_done' in st.session_state:
         col_s2.metric("Qualité (Overlap)", f"{tube.rbm_score*100:.2f} %")
 
     elif option == "Spectroscopie Optique":
-        st.header("🌈 Spectres Raman & IR")
-        fig_raman = tube.show_optics()
-        if fig_raman:
-            st.pyplot(fig_raman)
+        st.markdown("<h2 style='color: #10b981;'>🌈 Analyse Spectroscopique (IR & Raman)</h2>", unsafe_allow_html=True)
+        
+        # Création de 4 onglets "Pro" pour bien séparer les analyses
+        tab_ir, tab_raman_nr, tab_raman_res, tab_final = st.tabs([
+            "🔴 Spectroscopie IR", 
+            "🟢 Raman (Non-Résonant)", 
+            "🔵 Raman (Résonant)",
+            "📊 Analyse Avancée (Dernière partie)"
+        ])
+        
+        # --- ONGLET 1 : Infrarouge ---
+        with tab_ir:
+            st.subheader("Modèle de Saito - Absorption IR")
+            with st.spinner("Calcul des polarisations XX et ZZ..."):
+                try:
+                    fig_ir = tube.plot_ir_saito()
+                    st.pyplot(fig_ir)
+                except Exception as e:
+                    st.error(f"Erreur IR : {e}")
 
+        # --- ONGLET 2 : Raman Non-Résonant ---
+        with tab_ir: # Oops, correction : with tab_raman_nr:
+        with tab_raman_nr:
+            st.subheader("Spectre Raman Non-Résonant")
+            st.info("💡 Calcul basé sur la dérivée de la polarisabilité électrique.")
+            with st.spinner("Génération du spectre..."):
+                try:
+                    fig_rmn_nr = tube.plot_raman_non_resonant()
+                    st.pyplot(fig_rmn_nr)
+                except Exception as e:
+                    st.error(f"Erreur Raman Non-Résonant : {e}")
+
+        # --- ONGLET 3 : Raman Résonant ---
+        with tab_raman_res:
+            st.subheader("Spectre Raman Résonant")
+            st.info("💡 Intégration du couplage électron-phonon et de la densité d'états conjointe (JDOS).")
+            with st.spinner("Calcul des résonances quantiques..."):
+                try:
+                    fig_rmn_res = tube.plot_raman_resonant()
+                    st.pyplot(fig_rmn_res)
+                except Exception as e:
+                    st.error(f"Erreur Raman Résonant : {e}")
+                    
+        # --- ONGLET 4 : Dernière partie du code ---
+        with tab_final:
+            st.subheader("Synthèse et Analyse Complémentaire")
+            with st.spinner("Chargement..."):
+                try:
+                    fig_final = tube.plot_final_analysis()
+                    st.pyplot(fig_final)
+                except Exception as e:
+                    st.error(f"Erreur Analyse finale : {e}")
 else:
     st.info("👋 Bienvenue ! Réglez les indices (n, m) dans la barre latérale et cliquez sur 'Lancer les calculs'.")
