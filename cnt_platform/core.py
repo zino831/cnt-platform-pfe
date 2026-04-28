@@ -1,223 +1,363 @@
+# =============================================================================
+# CNT SIMULATION HUB - CORE ENGINE (Fichier Unique)
+# =============================================================================
+
+# --- IMPORTS GLOBAUX ---
 import numpy as np
 import matplotlib.pyplot as plt
-# Importation des modules spécialisés
-from .geometry import generate_structure, plot_3d_structure
-from .electronic import calculate_electronic_bands, plot_electronics_with_dos
-from .mechanics import calculate_young_modulus, plot_mechanics_graph
-from .optics import generate_raman_and_ir
-from .thermal import calculate_phonons, calculate_cv, plot_thermal_cv, construire_matrice_dynamique_pbc, determiner_mode_rbm
+from scipy.spatial import distance_matrix
+from ase.build import nanotube
+from ase.io import write
+import py3Dmol
+import io
+
+
+# =============================================================================
+# 1. MODULE GÉOMÉTRIE
+# =============================================================================
+def generate_structure(n, m, length=1):
+    atoms = nanotube(n, m, length=length)
+    a_lattice = atoms.get_cell()[2, 2]
+    return atoms, a_lattice
+
+def plot_3d_structure(atoms):
+    xyz_file = io.StringIO()
+    write(xyz_file, atoms, format='xyz')
+    xyz_string = xyz_file.getvalue()
+
+    view = py3Dmol.view(width=800, height=400)
+    view.addModel(xyz_string, 'xyz')
+    view.setStyle({'stick': {'color': 'grey', 'radius': 0.15}, 
+                   'sphere': {'scale': 0.25, 'color': 'midnightblue'}})
+    view.zoomTo()
+    return view
+
+
+# =============================================================================
+# 2. MODULE ÉLECTRONIQUE
+# =============================================================================
+def calculate_electronic_bands(n, m, num_k_points=1000):
+    t = 2.7  
+    dR = np.gcd(2*n + m, 2*m + n)
+    N = 2 * (n**2 + n*m + m**2) // dR  
+    t1 = (2*m + n) // dR
+    t2 = -(2*n + m) // dR
+    x1, y1 = -t2 / N, t1 / N
+    x2, y2 = m / N, -n / N
+    k_1d = np.linspace(-0.5, 0.5, num_k_points)
+    bands = np.zeros((num_k_points, 2 * N))
+    
+    for mu in range(N):
+        for i, k in enumerate(k_1d):
+            ka = mu * x1 + k * x2
+            kb = mu * y1 + k * y2
+            val = 1 + np.exp(1j * 2 * np.pi * ka) + np.exp(1j * 2 * np.pi * kb)
+            energy = t * np.abs(val)
+            bands[i, 2*mu] = energy       
+            bands[i, 2*mu + 1] = -energy  
+            
+    bands = np.sort(bands, axis=1)
+    k_axis = k_1d * 2 * np.pi
+    return k_axis, bands
+
+def plot_electronics_with_dos(k_axis, bands, fermi_energy=0.0):
+    tol = 1e-4
+    conduction_energies = bands[bands > fermi_energy + tol]
+    valence_energies = bands[bands < fermi_energy - tol]
+    
+    if len(conduction_energies) > 0 and len(valence_energies) > 0:
+        gap = np.min(conduction_energies) - np.max(valence_energies)
+    else:
+        gap = 0.0
+        
+    nature_text = "Métallique (Gap ≈ 0.00 eV)" if gap < 0.05 else f"Semi-conducteur (Gap = {gap:.3f} eV)"
+
+    all_energies = np.array(bands).flatten()
+    energy_grid = np.linspace(np.min(all_energies) - 0.5, np.max(all_energies) + 0.5, 1000)
+    
+    dos = np.zeros_like(energy_grid)
+    for E in all_energies:
+        dos += np.exp(-((energy_grid - E)**2) / (2 * 0.05**2))
+        
+    plt.style.use('dark_background')
+    fig, (ax_bands, ax_dos) = plt.subplots(1, 2, figsize=(10, 6), gridspec_kw={'width_ratios': [3, 1]}, sharey=True)
+    fig.suptitle(f"Propriétés Électroniques : {nature_text}", fontsize=16, color='#10b981')
+    
+    if len(bands.shape) > 1:
+        for i in range(bands.shape[1]):
+            ax_bands.plot(k_axis, bands[:, i], color='#00f2ff', lw=1.5)
+    else:
+        ax_bands.plot(k_axis, bands, color='#00f2ff', lw=1.5)
+        
+    ax_bands.axhline(y=fermi_energy, color='#e11d48', linestyle='--')
+    ax_bands.set_title("Structure de Bandes")
+    ax_bands.set_xlabel("Vecteur d'onde $k$ (1D)")
+    ax_bands.set_ylabel("Énergie (eV)")
+    ax_bands.grid(True, alpha=0.2)
+    
+    ax_dos.plot(dos, energy_grid, color='#8b5cf6', lw=2)
+    ax_dos.fill_betweenx(energy_grid, 0, dos, color='#8b5cf6', alpha=0.4)
+    ax_dos.axhline(y=fermi_energy, color='#e11d48', linestyle='--')
+    ax_dos.set_title("DOS Électronique")
+    ax_dos.grid(True, alpha=0.2)
+    ax_dos.set_xticks([]) 
+    
+    plt.ylim(-3.0, 3.0)
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    return fig
+
+
+# =============================================================================
+# 3. MODULE MÉCANIQUE
+# =============================================================================
+def calculate_young_modulus(atoms, a_lattice):
+    coords0 = atoms.get_positions()
+    k_bond = 29.3  
+    r0 = 1.42      
+    strains = np.linspace(-0.02, 0.02, 15)
+    energies = []
+    
+    for epsilon in strains:
+        coords_strained = coords0.copy()
+        coords_strained[:, 2] *= (1.0 + epsilon)
+        L_strained = a_lattice * (1.0 + epsilon)
+        
+        coords_plus = coords_strained.copy()
+        coords_plus[:, 2] += L_strained
+        
+        dist_0 = distance_matrix(coords_strained, coords_strained)
+        dist_plus = distance_matrix(coords_strained, coords_plus)
+        
+        bonds_0 = dist_0[(dist_0 > 0.1) & (dist_0 < 1.8)]
+        bonds_plus = dist_plus[(dist_plus > 0.1) & (dist_plus < 1.8)]
+        
+        E_0 = np.sum(0.5 * k_bond * (bonds_0 - r0)**2) / 2.0
+        E_plus = np.sum(0.5 * k_bond * (bonds_plus - r0)**2)
+        energies.append(E_0 + E_plus)
+        
+    energies = np.array(energies) - np.min(energies)
+    coefs = np.polyfit(strains, energies, 2)
+    
+    rayon = np.mean(np.sqrt(coords0[:, 0]**2 + coords0[:, 1]**2))
+    volume = 2 * np.pi * rayon * a_lattice * 3.35
+    Y_GPa = (2 * coefs[0] / volume) * 160.2176
+    return strains, energies, coefs, Y_GPa
+
+def plot_mechanics_graph(strains, energies, coefs, Y_GPa):
+    plt.style.use('dark_background')
+    fig = plt.figure(figsize=(6, 4))
+    plt.plot(strains*100, energies, 'o', color='#00f2ff')
+    plt.plot(strains*100, np.polyval(coefs, strains), color='#e11d48', lw=2)
+    plt.title(f"Module de Young : {Y_GPa/1000:.2f} TPa", color='#10b981')
+    plt.xlabel("Déformation (%)")
+    plt.ylabel("Énergie (eV)")
+    plt.grid(alpha=0.2)
+    return fig
+
+
+# =============================================================================
+# 4. MODULE THERMIQUE ET DYNAMIQUE
+# =============================================================================
+def generer_neighbor_list_pbc(pos_atoms, lattice_constant, acc=1.42):
+    n_atoms = len(pos_atoms)
+    dist_theoriques = [acc, np.sqrt(3)*acc, 2*acc, np.sqrt(7)*acc]
+    neighbor_list = []
+    for i in range(n_atoms):
+        atom_neighbors = []
+        for cell_shift in [-2, -1, 0, 1, 2]:
+            T_vec = np.array([0, 0, cell_shift * lattice_constant])
+            for j in range(n_atoms):
+                R_ij = (pos_atoms[j] + T_vec) - pos_atoms[i]
+                dist = np.linalg.norm(R_ij)
+                if dist < 0.1: continue 
+                rank = 0
+                for r, d_target in enumerate(dist_theoriques):
+                    if abs(dist - d_target) < 0.2:
+                        rank = r + 1
+                        break
+                if rank > 0:
+                    atom_neighbors.append({'idx': j, 'rank': rank, 'R': R_ij, 'dist': dist})
+        neighbor_list.append(atom_neighbors)
+    return neighbor_list
+
+def construire_matrice_dynamique_pbc(atoms_obj, q_z, mass=12.011):
+    pos = atoms_obj.get_positions()
+    n_atoms = len(pos)
+    lattice_constant = atoms_obj.get_cell()[2, 2]
+    m_carbon = mass / (6.022e23 * 1e3) 
+    
+    dyn_mat = np.zeros((3 * n_atoms, 3 * n_atoms), dtype=complex)
+    neighbor_list = generer_neighbor_list_pbc(pos, lattice_constant)
+    
+    phi_params = {
+        1: {'r': 365.0, 'ti': 245.0}, 2: {'r': 88.0,  'ti': -32.3},
+        3: {'r': 30.0,  'ti': -52.5}, 4: {'r': -19.0, 'ti': 22.9}
+    }
+    
+    for i in range(n_atoms):
+        for neighbor in neighbor_list[i]:
+            j, rank, R, dist = neighbor['idx'], neighbor['rank'], neighbor['R'], neighbor['dist']
+            u = R / dist
+            fr, fti = phi_params[rank]['r'], phi_params[rank]['ti']
+            K_local = (fr - fti) * np.outer(u, u) + fti * np.eye(3)
+            phase = np.exp(1j * q_z * R[2])
+            term = (K_local / m_carbon) * phase
+            dyn_mat[3*i:3*i+3, 3*j:3*j+3] -= term
+            dyn_mat[3*i:3*i+3, 3*i:3*i+3] += (K_local / m_carbon)
+            
+    return dyn_mat
+
+
+# =============================================================================
+# 5. MODULE OPTIQUE (MÉTHODES INTÉGRÉES DANS LA CLASSE)
+# =============================================================================
 
 class CarbonNanotube:
-    """
-    Classe Chef d'orchestre : Elle lie la géométrie, l'électronique 
-    et les autres propriétés.
-    """
-    
+    """Classe principale liant toutes les propriétés physiques."""
     def __init__(self, n, m, length=1):
         self.n = n
         self.m = m
         self.length = length
         self.is_metallic = (n - m) % 3 == 0
-        
-        # Initialisation des attributs de données
-        self.atoms = None
-        self.a_lattice = None
-        self.bands = None
-        self.q_array = None
-        
-        # 1. On génère la géométrie dès la création de l'objet
-        self._generate_geometry()
-
-    def _generate_geometry(self):
-        """Appelle le module geometry.py"""
         self.atoms, self.a_lattice = generate_structure(self.n, self.m, self.length)
 
     def show_3d(self):
-        """Retourne la structure 3D interactive pour Streamlit"""
-        if self.atoms is not None:
-            return plot_3d_structure(self.atoms)  # On retourne la figure au lieu de faire .show()
+        return plot_3d_structure(self.atoms)
 
-    def compute_electronics(self, n_points=100):
-        """Appelle le module electronic.py pour le calcul des bandes"""
-        # Création de l'espace réciproque (q)
-        self.q_array = np.linspace(0, np.pi/self.a_lattice, n_points)
-        
-       # Calcul via la fonction externe avec les bons arguments (n, m)
-        self.elec_k_points, self.elec_bands = calculate_electronic_bands(
-            self.n, 
-            self.m, 
-            num_k_points=1000
-        )
-        print(f"✅ Calcul électronique terminé pour ({self.n},{self.m})")
+    # --- ÉLECTRONIQUE ---
+    def compute_electronics(self):
+        self.elec_k_points, self.elec_bands = calculate_electronic_bands(self.n, self.m)
 
-    def show_electronics(self):
-        """Affiche les bandes électroniques et le DOS."""
-        # On vérifie les nouvelles variables spécifiques
-        if hasattr(self, 'elec_k_points') and hasattr(self, 'elec_bands'):
-            plot_electronics_with_dos(self.elec_k_points, self.elec_bands, fermi_energy=0.0)
-        else:
-            print("❌ Erreur : Veuillez lancer compute_electronics() d'abord.")
+    def plot_electronics(self):
+        if hasattr(self, 'elec_k_points'):
+            return plot_electronics_with_dos(self.elec_k_points, self.elec_bands)
 
-    def summary(self):
-        """Résumé des propriétés de l'objet"""
-        ntc_type = "Métallique" if self.is_metallic else "Semi-conducteur"
-        print(f"--- Propriétés du Nanotube ({self.n}, {self.m}) ---")
-        print(f"Type : {ntc_type}")
-        print(f"Nombre d'atomes : {len(self.atoms)}")
-        print(f"Période spatiale Lz : {self.a_lattice:.3f} Å")
-        print("-" * 40)
-
+    # --- MÉCANIQUE ---
     def compute_mechanics(self):
         self.strains, self.energies, self.coefs, self.young_modulus = calculate_young_modulus(self.atoms, self.a_lattice)
-        print(f"✅ Module de Young : {self.young_modulus:.0f} GPa")
+        self.young_modulus_tpa = self.young_modulus / 1000 # Conversion en TPa
 
-    def show_mechanics(self):
-        plot_mechanics_graph(self.strains, self.energies, self.coefs, self.young_modulus)
+    def plot_mechanics(self):
+        if hasattr(self, 'strains'):
+            return plot_mechanics_graph(self.strains, self.energies, self.coefs, self.young_modulus)
 
-    def compute_optics(self):
-        """Calcule les spectres Raman et IR à partir des phonons"""
-        if hasattr(self, 'phonons'):
-            # On utilise le module optics importé en haut du fichier
-            from .optics import generate_raman_and_ir
-            self.w_axis, self.raman, self.ir = generate_raman_and_ir(self)
-            print("✅ Spectres Raman/IR générés")
-        else:
-            print("❌ Calculez d'abord la thermique (phonons) !")
+    # =========================================================================
+    # --- VOS NOUVELLES FONCTIONS D'OPTIQUE (IR & RAMAN) ---
+    # =========================================================================
 
-    def show_optics(self):
-        """Génère et retourne les spectres Raman et Infrarouge pour Streamlit."""
-        
-        # 1. On s'assure que les calculs sont faits
-        if not hasattr(self, 'raman'):
-            self.compute_optics()
-            
-        # 2. On appelle la fonction de tracé (elle doit créer un plot)
-        # Note : Si generate_raman_and_ir crée déjà une figure, plt.gcf() la récupérera
-        generate_raman_and_ir(self)
-        
-        # 3. TRÈS IMPORTANT : On retourne la figure actuelle
-        fig = plt.gcf()
-        return fig
-    def compute_thermal(self, t_min=1, t_max=1000):
-        self.q_thermal = np.linspace(0, np.pi/self.a_lattice, 20)
-        self.phonons = calculate_phonons(self.atoms, self.a_lattice, self.q_thermal)
-        
-        self.temps = np.linspace(t_min, t_max, 100)
-        self.cv = calculate_cv(self.phonons, self.temps)
-        print("✅ Propriétés thermiques (Phonons & Cv) calculées.")
+    def plot_ir_saito(self):
+        """
+        Spectre Infrarouge selon le modèle de Saito (VOTRE CODE EXACT)
+        """
+        # --- 1. CONFIGURATION DYNAMIQUE ---
+        pos = self.atoms.get_positions()
+        n_atoms = len(pos)
+        nt = 3 * n_atoms 
 
-    def show_thermal(self):
-    
-        if hasattr(self, 'cv'):
-            plot_thermal_cv(self.temps, self.cv)
-        else:
-            print("❌ Erreur : Calculez d'abord la thermique.")
-    def compute_saito_dynamics(self):
-        """Calcule les modes RBM et G avec les paramètres de Saito"""
-        # On importe les fonctions ici au cas où
-        import numpy as np
-        from .thermal import construire_matrice_dynamique_pbc, determiner_mode_rbm
-        
-        # Calcul de la matrice
+        # --- 2. ATTRIBUTION DES CHARGES ---
+        qc = np.array([1.0 if i % 2 == 0 else -1.0 for i in range(n_atoms)])
+
+        # --- 3. DYNAMIQUE ET RÉPONSE ---
         D = construire_matrice_dynamique_pbc(self.atoms, q_z=0)
         eigenvalues, eigenvectors = np.linalg.eigh(D)
-        
-        # ON ATTACHE TOUT À "self." POUR SAUVEGARDER EN MÉMOIRE
-        self.wavenumbers_saito = np.sqrt(np.maximum(eigenvalues, 0)) / (2 * np.pi * 2.99792458e10)
-        
-        pos = self.atoms.get_positions()
-        idx, self.f_rbm, self.rbm_score = determiner_mode_rbm(pos, eigenvectors, self.wavenumbers_saito)
-        self.d_t = (np.mean(np.sqrt(pos[:,0]**2 + pos[:,1]**2)) * 2) / 10
-        
-        print(f"✅ Dynamique de Saito calculée avec succès !")
+        fre_rad = np.sqrt(np.maximum(eigenvalues.real, 0))
+        amassc = 12.011 / (6.022e23 * 1e3) 
 
-    def show_saito_dynamics(self):
-        """Affiche les résultats de la dynamique de Saito"""
-        if hasattr(self, 'f_rbm'):
-            print("\n" + "="*55)
-            print(f"ANALYSE DU MODE RBM (SAITO - PBC)")
-            print(f"Diamètre            : {self.d_t:.3f} nm")
-            print(f"Fréquence RBM       : {self.f_rbm:.2f} cm⁻¹")
-            print(f"Fréquence théorique : ~{227/self.d_t:.2f} cm⁻¹")
-            print(f"Qualité (Overlap)   : {self.rbm_score*100:.2f} %")
-            print(f"Fréquences Bande G  : {self.wavenumbers_saito[-4]:.2f}, {self.wavenumbers_saito[-1]:.2f} cm⁻¹")
-            print("="*55)
-        else:
-            print("❌ Calculez d'abord compute_saito_dynamics()")
-    def compute_dispersion(self, n_points_q=100):
-        """Calcule les courbes de dispersion et la DOS sur la Zone de Brillouin."""
-        import numpy as np
-        from .thermal import construire_matrice_dynamique_pbc
-        
-        self.a_lattice = self.atoms.get_cell()[2, 2] 
-        self.q_space = np.linspace(0, np.pi / self.a_lattice, n_points_q)
-        
-        print(f"Calcul de la dispersion pour {n_points_q} points q...")
-        all_frequencies = []
-        
-        for qz in self.q_space:
-            D_q = construire_matrice_dynamique_pbc(self.atoms, q_z=qz)
-            vals = np.linalg.eigvalsh(D_q)
-            freqs = np.sqrt(np.maximum(vals, 0)) / (2 * np.pi * 2.99792458e10)
-            all_frequencies.append(sorted(freqs))
+        id_pts = 3000
+        x_range_cm1 = np.linspace(1, 1800, id_pts)
+        x_range_rad = x_range_cm1 * (2 * np.pi * 2.99792458e10)
+        gamma_rad = 1.0e11 # Largeur de raie ajustable
+        cm = 1j
+
+        epsd_xx = np.zeros(id_pts)
+        epsd_zz = np.zeros(id_pts)
+
+        for ii in [0, 2]: # 0 pour X (transverse), 2 pour Z (longitudinal)
+            q_vec = np.zeros(nt)
+            for i in range(n_atoms):
+                q_vec[i * 3 + ii] = qc[i] / np.sqrt(amassc)
             
-        self.all_frequencies = np.array(all_frequencies)
-        print("✅ Dispersion calculée avec succès !")
+            for j in range(nt):
+                tt = np.dot(q_vec, eigenvectors[:, j].real)
+                force_j = tt * tt
+                
+                denom = (x_range_rad**2 - fre_rad[j]**2) - cm * gamma_rad
+                sc = x_range_rad * force_j / (denom * np.pi)
+                
+                if ii == 0:
+                    epsd_xx += np.imag(sc)
+                else:
+                    epsd_zz += np.imag(sc)
 
-    def plot_dispersion_and_dos(self):
-        """Trace les courbes de dispersion et la Densité d'États (DOS)."""
-        import matplotlib.pyplot as plt
-        import numpy as np
+        # --- 4. TRACÉ ---
+        plt.style.use('dark_background')
+        fig, ax = plt.subplots(figsize=(10, 6))
         
-        # Vérification de sécurité
-        if not hasattr(self, 'all_frequencies'):
-            print("❌ Erreur : Veuillez d'abord lancer compute_dispersion()")
-            return
+        ax.plot(x_range_cm1, epsd_xx, label='Polarisation XX (Transverse)', color='#00f2ff', lw=2)
+        ax.plot(x_range_cm1, epsd_zz, label='Polarisation ZZ (Longitudinale)', color='#e11d48', linestyle='--', lw=2)
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 8), sharey=True, 
-                                       gridspec_kw={'width_ratios': [3, 1]})
-
-        # A. Tracé de la Relation de Dispersion
-        q_norm = self.q_space * self.a_lattice / np.pi
-        for i in range(self.all_frequencies.shape[1]):
-            ax1.plot(q_norm, self.all_frequencies[:, i], 
-                     color='midnightblue', alpha=0.7, lw=0.8)
-
-        ax1.set_title(f"Relation de Dispersion - CNT ({self.n},{self.m})", fontsize=12)
-        ax1.set_xlabel(r"Vecteur d'onde $q_z$ ($\pi/a$)")
-        ax1.set_ylabel("Fréquence (cm⁻¹)")
-        ax1.set_xlim(0, 1)
-        ax1.set_ylim(0, 1700) # Coupe la fréquence max autour de la bande G
-        ax1.grid(True, linestyle=':', alpha=0.6)
-
-        # B. Tracé de la Densité d'États (DOS)
-        flat_freqs = self.all_frequencies.flatten()
-        ax2.hist(flat_freqs, bins=200, orientation='horizontal', 
-                 color='royalblue', alpha=0.8, density=True)
-
-        ax2.set_title("DOS (Phonons)", fontsize=12)
-        ax2.set_xlabel("Intensité (u.a.)")
-        ax2.grid(True, linestyle=':', alpha=0.6)
-
-        plt.tight_layout()
-        #plt.show()
-        return plt.gcf()
+        ax.axvspan(800, 900, color='#10b981', alpha=0.15, label='Zone attendue (Flexion)')
+        ax.set_title(f"Spectre IR Polarisé - Modèle de Saito - CNT ({self.n},{self.m})", color='#10b981', fontsize=14)
+        ax.set_xlabel("Fréquence (cm⁻¹)")
+        ax.set_ylabel("Intensité (Im(sc))")
+        ax.legend(facecolor='#161b22')
+        ax.grid(True, alpha=0.2)
         
-        # --- BLOC PROPRIÉTÉS OPTIQUES ---
-        st.subheader("7. Propriétés Optiques")
+        return fig
+
+    def plot_raman_non_resonant(self):
+        """
+        Spectre Raman Non-Résonant.
+        REMPLACEZ CE CODE PAR CELUI DE VOTRE JUPYTER NOTEBOOK.
+        """
+        plt.style.use('dark_background')
+        fig, ax = plt.subplots(figsize=(10, 6))
         
-        # Affichage du graphique
-        fig_optics = tube.plot_optics()
-        if fig_optics is not None:
-            st.pyplot(fig_optics)
-            plt.clf()
-            
-        # Affichage des valeurs exactes
-        if hasattr(tube, 'transitions'):
-            st.markdown("**Énergies de Transition (Règle de Kataura) :**")
-            cols_opt = st.columns(len(tube.transitions))
-            
-            for i, (nom, energie) in enumerate(tube.transitions.items()):
-                # Conversion approchée de l'énergie (eV) en longueur d'onde (nm)
-                longueur_onde = 1240 / energie 
-                cols_opt[i].metric(f"Transition {nom}", f"{energie:.2f} eV", f"~ {longueur_onde:.0f} nm")
+        # --- CODE PROVISOIRE (À REMPLACER) ---
+        x = np.linspace(100, 1800, 1000)
+        y = np.exp(-((x - 1580)**2)/200) + 0.5 * np.exp(-((x - 200)**2)/100) # G-band & RBM fictives
+        ax.plot(x, y, color='#f59e0b', lw=2)
+        ax.set_title(f"Spectre Raman Non-Résonant - CNT ({self.n},{self.m})", color='#10b981')
+        ax.set_xlabel("Fréquence (cm⁻¹)")
+        ax.set_ylabel("Intensité Raman")
+        ax.grid(True, alpha=0.2)
+        # ---------------------------------------
+        
+        return fig
+
+    def plot_raman_resonant(self):
+        """
+        Spectre Raman Résonant (Intégration JDOS etc.)
+        REMPLACEZ CE CODE PAR CELUI DE VOTRE JUPYTER NOTEBOOK.
+        """
+        plt.style.use('dark_background')
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # --- CODE PROVISOIRE (À REMPLACER) ---
+        x = np.linspace(100, 1800, 1000)
+        y = 2.0 * np.exp(-((x - 1580)**2)/150) + 1.5 * np.exp(-((x - 280)**2)/80)
+        ax.plot(x, y, color='#8b5cf6', lw=2)
+        ax.set_title(f"Spectre Raman Résonant (Couplage e-ph) - CNT ({self.n},{self.m})", color='#10b981')
+        ax.set_xlabel("Fréquence (cm⁻¹)")
+        ax.set_ylabel("Intensité Résonante")
+        ax.grid(True, alpha=0.2)
+        # ---------------------------------------
+        
+        return fig
+
+    def plot_final_analysis(self):
+        """
+        Analyse finale (Synthèse de votre code Jupyter)
+        REMPLACEZ CE CODE PAR CELUI DE VOTRE JUPYTER NOTEBOOK.
+        """
+        plt.style.use('dark_background')
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # --- CODE PROVISOIRE (À REMPLACER) ---
+        ax.text(0.5, 0.5, "Espace réservé pour la synthèse finale", 
+                color='#00f2ff', fontsize=16, ha='center')
+        ax.set_title("Analyse Avancée Optique", color='#10b981')
+        ax.axis('off')
+        # ---------------------------------------
+        
+        return fig
