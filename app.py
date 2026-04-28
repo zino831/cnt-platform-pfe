@@ -1,7 +1,7 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 import streamlit.components.v1 as components  # <-- Ajoutez cette ligne
-from cnt_platform.core import CarbonNanotube
+from core import CarbonNanotube
 
 st.set_page_config(
     page_title="CNT Dynamics Pro-Platform",
